@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    rios_reaper
+
+    Kills RIOS ECS Clusters that are still running.
+
+Parameters:
+  Architecture:
+    Type: String
+    Default: arm64
+    Description: Architecture we are building for
+    AllowedValues:
+      - arm64
+      - x86_64
+  Runtime:
+    Type: String
+    Default: python3.12  # note: with a dot
+  VPCId:
+    Type: String
+  SubnetIds:
+    Type: CommaDelimitedList
+
+Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: !Ref Runtime
+
+Resources:
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the RIOS Reaper
+      VpcId: !Ref VPCId
+
+  RIOSReaperDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: RIOSReaperScrapeDLQ
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  RIOSReaperFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RIOS_Reaper
+      Handler: app.lambda_handler
+      CodeUri: reaper
+      Description: 'Function that reaps RIOS ECS clusters'
+      Architectures:
+        - !Ref Architecture
+      Tracing: Active
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ec2:DescribeInstances
+                - ec2:TerminateInstances
+              Resource:
+                - '*'
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: PKeyAPI
+          POWERTOOLS_METRICS_NAMESPACE: Powertools
+          POWERTOOLS_LOG_LEVEL: INFO
+          LOG_LEVEL: INFO
+      Events:
+        InvocationSchedule:
+          Type: Schedule
+          Properties:
+            # Runs at 15 minutes past midnight
+            # https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html
+            Schedule: "cron(15 0 * * ? *)"
+            Input: '{"detail": {}}'
+            Enabled: true
+            Name: "RIOSReaperInvocationSchedule"
+            Description: "Invoke the Lambda function at 15 minutes past midnight"
+            DeadLetterConfig:
+              Arn: !GetAtt RIOSReaperDLQ.Arn
+            RetryPolicy:
+               MaximumRetryAttempts: 0
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Split [',', Fn::Ref SubnetIds]
+  ReaperFunctionInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref RIOSReaperFunction
+      Qualifier: "$LATEST"
+      MaximumRetryAttempts: 0
