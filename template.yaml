@@ -19,7 +19,7 @@ Parameters:
   VPCId:
     Type: String
   SubnetIds:
-    Type: CommaDelimitedList
+    Type: String
 
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
@@ -56,6 +56,7 @@ Resources:
             - Effect: Allow
               Action:
                 - ec2:DescribeInstances
+                - cloudwatch:GetMetricStatistics
                 - ec2:TerminateInstances
               Resource:
                 - '*'
@@ -83,7 +84,7 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
-        SubnetIds: !Split [',', Fn::Ref SubnetIds]
+        SubnetIds: !Split [',', !Ref SubnetIds]
   ReaperFunctionInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
     Properties:
