@@ -2,6 +2,7 @@
 Module that implements the RIOS Reaper
 """
 
+import os
 import datetime
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools import Logger
@@ -98,5 +99,17 @@ def lambda_handler(event: dict, context: LambdaContext) -> dict:
     idleInstanceList = findIdleInstances('RIOS-computeworkerinstance')
 
     logger.warning("Idle instances: %s", ','.join(idleInstanceList))
+
+    topic_arn = os.getenv('SNS_TOPIC_ARN')
+    if topic_arn != 'SNSTopic':
+        # weirdly the SNS_TOPIC_ARN env var gets set to SNSTopic
+        # instead of an ARN in lambda local mode as the SNS Topic
+        # has not been created yet.
+        sns = boto3.client('sns')
+        if len(idleInstanceList) == 0:
+            msg = 'No Idle Instances detected'
+        else:
+            msg = 'The following idle instances were found: ' + ','.join(idleInstanceList)
+        sns.publish(TopicArn=topic_arn, Message=msg)
 
     return {'idle': idleInstanceList}

@@ -47,9 +47,13 @@ def main():
     if 'SUBNET_IDS' not in os.environ:
         raise SystemExit('Must set SUBNET_IDS env var to a comma separated list of subnet ids')
 
+    if 'EMAIL' not in os.environ:
+        raise SystemExit('Must set the EMAIL env var to the recipient email for notifications')
+
     parameter_overrides = ['--parameter-overrides', 
         'ParameterKey=VPCId,ParameterValue={}'.format(os.environ['VPC_ID']),
-        'ParameterKey=SubnetIds,ParameterValue={}'.format(os.environ['SUBNET_IDS'])]
+        'ParameterKey=SubnetIds,ParameterValue={}'.format(os.environ['SUBNET_IDS']),
+        'ParameterKey=email,ParameterValue={}'.format(os.environ['EMAIL'])]
 
     # Get: Lambda functions containers initialization failed because of Layers require credentials to download the layers locally.
     # because of the danger of messing up the AWS_ACCESS_KEY_ID/AWS_PROFILE and having them not match

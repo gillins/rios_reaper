@@ -19,6 +19,8 @@ Parameters:
   VPCId:
     Type: String
   SubnetIds:
+    Type: CommaDelimitedList
+  email:
     Type: String
 
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
@@ -60,12 +62,19 @@ Resources:
                 - ec2:TerminateInstances
               Resource:
                 - '*'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref SNSTopic
       Environment:
         Variables:
           POWERTOOLS_SERVICE_NAME: PKeyAPI
           POWERTOOLS_METRICS_NAMESPACE: Powertools
           POWERTOOLS_LOG_LEVEL: INFO
           LOG_LEVEL: INFO
+          SNS_TOPIC_ARN: !Ref SNSTopic
       Events:
         InvocationSchedule:
           Type: Schedule
@@ -84,10 +93,18 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
-        SubnetIds: !Split [',', !Ref SubnetIds]
+        SubnetIds: !Ref SubnetIds
   ReaperFunctionInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
     Properties:
       FunctionName: !Ref RIOSReaperFunction
       Qualifier: "$LATEST"
       MaximumRetryAttempts: 0
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: rios_reaper_notifications
+      Subscription:
+      - Endpoint: !Ref email
+        Protocol: email
