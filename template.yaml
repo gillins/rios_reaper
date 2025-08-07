@@ -60,6 +60,8 @@ Resources:
                 - ec2:DescribeInstances
                 - cloudwatch:GetMetricStatistics
                 - ec2:TerminateInstances
+                - ecs:ListClusters
+                - ecs:DescribeClusters
               Resource:
                 - '*'
         - Version: '2012-10-17'

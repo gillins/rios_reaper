@@ -87,6 +87,47 @@ def getCPUUtilization(cloudwatchClient, instanceId, periodLen, numPeriods):
     return hourlyAvgCpuPcnt
 
 
+def findStoppedClustersByTag(ecs_client, tag_key):
+    """
+    Return a list of clusters with with given tag key
+    and zero running tasks
+    """
+    matching_clusters = []
+    cluster_arns = []
+    paginator = ecs_client.get_paginator('list_clusters')
+    for page in paginator.paginate():
+        cluster_arns.extend(page['clusterArns'])
+
+    if not cluster_arns:
+        return []
+
+    # 2. Describe clusters to get tags (in batches of up to 100)
+    for i in range(0, len(cluster_arns), 100):
+        batch_arns = cluster_arns[i:i + 100]
+        response = ecs_client.describe_clusters(
+            clusters=batch_arns,
+            include=['TAGS']
+        )
+        
+        # 3. Filter based on tags
+        for cluster in response['clusters']:
+            if cluster.get('runningTasksCount') == 0 and 'tags' in cluster:
+                for tag in cluster['tags']:
+                    if tag.get('key') == tag_key:
+                        matching_clusters.append(cluster['clusterName'])
+                        break  # Found the tag, move to the next cluster
+
+    return matching_clusters
+
+
+def findStoppedClusters(tag_key):
+    ecs_client = boto3.client('ecs')
+
+    matching_clusters = findStoppedClustersByTag(ecs_client, tag_key)
+
+    return matching_clusters    
+
+
 # Enrich logging with contextual information from Lambda
 @logger.inject_lambda_context
 # Adding tracer
@@ -97,8 +138,10 @@ def getCPUUtilization(cloudwatchClient, instanceId, periodLen, numPeriods):
 def lambda_handler(event: dict, context: LambdaContext) -> dict:
     logger.warning(f"Received event: {event}")
     idleInstanceList = findIdleInstances('RIOS-computeworkerinstance')
+    stoppedClusters = findStoppedClusters('RIOS-cluster')
 
     logger.warning("Idle instances: %s", ','.join(idleInstanceList))
+    logger.warning("Stopped Clusters: %s", ','.join(stoppedClusters))
 
     topic_arn = os.getenv('SNS_TOPIC_ARN')
     if topic_arn != 'SNSTopic':
@@ -110,6 +153,11 @@ def lambda_handler(event: dict, context: LambdaContext) -> dict:
             msg = 'No Idle Instances detected'
         else:
             msg = 'The following idle instances were found: ' + ','.join(idleInstanceList)
+
+        if len(stoppedClusters) == 0:
+            msg += '\nNo Stopped Clusters found'
+        else:
+            msg += '\nThe following stopped clusters were found: ' + ','.join(stoppedClusters)
         sns.publish(TopicArn=topic_arn, Message=msg)
 
-    return {'idle': idleInstanceList}
+    return {'idle': idleInstanceList, 'stopped': stoppedClusters}
