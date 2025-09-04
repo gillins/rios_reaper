@@ -21,15 +21,17 @@ def findIdleInstances(tagKey, periodLen=3600, numPeriods=12, idleThreshold=1):
     An instance is defined as idle if all periods have CPU utilization less
     than the given threshold (percentage).
 
-    Return a list of instanceID strings for all idle instances.
+    Return a list of instanceID strings for all idle instances and a set
+    of their unique clusterIDs
     """
     ec2client = boto3.client('ec2')
     cloudwatchClient = boto3.client('cloudwatch')
 
-    instanceIdList = findInstancesByTag(ec2client, tagKey)
+    instanceIdDict = findInstancesByTag(ec2client, tagKey)
 
     idleInstanceList = []
-    for instanceId in instanceIdList:
+    idleClusterSet = set()
+    for instanceId, clusterId in instanceIdDict.items():
         cpuUtilList = getCPUUtilization(cloudwatchClient, instanceId,
             periodLen, numPeriods)
         # We need to have the full set of periods
@@ -37,13 +39,17 @@ def findIdleInstances(tagKey, periodLen=3600, numPeriods=12, idleThreshold=1):
             isIdle = (max(cpuUtilList) < idleThreshold)
             if isIdle:
                 idleInstanceList.append(instanceId)
+                if clusterId is not None:
+                    idleClusterSet.add(clusterId)
 
-    return idleInstanceList
+    return idleInstanceList, idleClusterSet
 
 
 def findInstancesByTag(ec2client, tagKey):
     """
     Find all instances which have the given tag (regardless of its value)
+
+    Returns a dictionary keyed on instanceId. The value will be the clusterId.
     """
     # A filter for the tag key, regardless of its value
     tagFilter = {'Name': 'tag-key', 'Values': [tagKey]}
@@ -52,12 +58,19 @@ def findInstancesByTag(ec2client, tagKey):
     # Extract the instanceId strings
     reservationsList = response['Reservations']
 
-    instanceIdList = []
+    instanceIdDict = {}
     for res in reservationsList:
         instList = res['Instances']
-        instanceIdList.extend([inst['InstanceId'] for inst in instList])
+        for inst in instList:
+            instanceId = inst['InstanceId']
+            clusterId = None
+            if 'Tags' in inst:
+                for tag in inst['Tags']:
+                    if tag['Key'] == 'RIOS-cluster':
+                        clusterId = tag['Value']
+            instanceIdDict[instanceId] = clusterId
 
-    return instanceIdList
+    return instanceIdDict
 
 
 def getCPUUtilization(cloudwatchClient, instanceId, periodLen, numPeriods):
@@ -137,8 +150,9 @@ def findStoppedClusters(tag_key):
 @metrics.log_metrics(capture_cold_start_metric=True)
 def lambda_handler(event: dict, context: LambdaContext) -> dict:
     logger.warning(f"Received event: {event}")
-    idleInstanceList = findIdleInstances('RIOS-computeworkerinstance')
+    idleInstanceList, idleclusters = findIdleInstances('RIOS-computeworkerinstance')
     stoppedClusters = findStoppedClusters('RIOS-cluster')
+    idleclusters.update(stoppedClusters)
 
     logger.warning("Idle instances: %s", ','.join(idleInstanceList))
     logger.warning("Stopped Clusters: %s", ','.join(stoppedClusters))
