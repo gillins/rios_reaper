@@ -133,10 +133,13 @@ def findStoppedClustersByTag(ecs_client, tag_key):
     return matching_clusters
 
 
-def findStoppedClusters(tag_key):
+def findStoppedClusters(tag_keys):
     ecs_client = boto3.client('ecs')
 
-    matching_clusters = findStoppedClustersByTag(ecs_client, tag_key)
+    matching_clusters = []
+    for tag_key in tag_keys:
+        clusters = findStoppedClustersByTag(ecs_client, tag_key)
+        matching_clusters.extend(clusters)
 
     return matching_clusters    
 
@@ -151,7 +154,7 @@ def findStoppedClusters(tag_key):
 def lambda_handler(event: dict, context: LambdaContext) -> dict:
     logger.warning(f"Received event: {event}")
     idleInstanceList, idleclusters = findIdleInstances('RIOS-computeworkerinstance')
-    stoppedClusters = findStoppedClusters('RIOS-cluster')
+    stoppedClusters = findStoppedClusters(['RIOS-cluster', 'pyshepseg-cluster'])
     idleclusters.update(stoppedClusters)
 
     logger.warning("Idle instances: %s", ','.join(idleInstanceList))
