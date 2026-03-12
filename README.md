@@ -1,7 +1,8 @@
 # rios_reaper
 
-This Lambda collects up EC2 instances that have not been terminated by RIOS 
-for whatever reason.
+This Lambda collects up EC2 Instances and ECS/Fargate Clusters 
+that have not been terminated by RIOS and/or PyShepSeg for whatever reason.
+It does this by inspecting the tags that have been attached to these resources.
 
 ## Installation
 
