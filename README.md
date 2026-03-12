@@ -30,6 +30,7 @@ The following env vars must be set in your environment before running `test-depl
 1. AWS_PROFILE - the name of the profile you are running under, or `default`
 2. VPC_ID - the id of the VPC you want the Lambda to run under
 3. SUBNET_IDS - a comma separated list of subnet ids the Lambda is to run within
+4. EMAIL - the email address you want notifications to be sent to
 
 ## Local testing
 
