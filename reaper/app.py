@@ -154,7 +154,7 @@ def findStoppedClusters(tag_keys):
 def lambda_handler(event: dict, context: LambdaContext) -> dict:
     logger.warning(f"Received event: {event}")
     idleInstanceList, idleclusters = findIdleInstances('RIOS-computeworkerinstance')
-    stoppedClusters = findStoppedClusters(['RIOS-cluster', 'pyshepseg-cluster'])
+    stoppedClusters = findStoppedClusters(['RIOS-cluster', 'pyshepseg-cluster', 'ECSCALL-cluster'])
     idleclusters.update(stoppedClusters)
 
     logger.warning("Idle instances: %s", ','.join(idleInstanceList))
